@@ -66,7 +66,14 @@ pub fn recv(
     req: Form<InboundMessage>, func: &dyn Fn(InboundMessage) -> bool
 ) -> impl Responder {
     const ACCEPTED_KEY: &'static str = "TWILIO_RECV_ACCEPTED_NUMS";
-    dotenv().unwrap();
+    match dotenv() {
+        Err(_) => {
+            return HttpResponse::InternalServerError().body(
+                "Failed to derive dotenv environment"
+            );
+        },
+        _ => {},
+    }
     let accepted_nums = match env_var(ACCEPTED_KEY) {
         Ok(an) => an,
         Err(_) => {
