@@ -100,6 +100,7 @@ fn write_to_log(log_type: LogType, msg: impl AsRef<str>) {
     let file_name = format!("{}.{}.log", BASE_NAME, now_short_fmt);
     path.push(file_name);
     let mut file = match OpenOptions::new()
+        .create(true)
         .write(true)
         .read(false)
         .append(true)
