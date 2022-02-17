@@ -113,7 +113,7 @@ fn write_to_log(log_type: LogType, msg: impl AsRef<str>) {
         },
     };
     match file.write_all(
-        format!("{} {}: {}", log_type.to_str(), now_long_fmt, msg.as_ref())
+        format!("{} {}: {}\n", log_type.to_str(), now_long_fmt, msg.as_ref())
             .as_bytes()
     ) {
         Ok(_) => {},
