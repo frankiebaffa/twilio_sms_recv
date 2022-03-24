@@ -126,8 +126,16 @@ fn write_to_log(log_type: LogType, msg: impl AsRef<str>) {
 fn log(msg: impl AsRef<str>) {
     write_to_log(LogType::Log, msg);
 }
+pub fn callback_log(msg: impl AsRef<str>) {
+    let message = msg.as_ref();
+    write_to_log(LogType::Log, format!("Callback - {}", message));
+}
 fn error(msg: impl AsRef<str>) {
     write_to_log(LogType::Error, msg);
+}
+pub fn callback_error(msg: impl AsRef<str>) {
+    let message = msg.as_ref();
+    write_to_log(LogType::Error, format!("Callback - {}", message));
 }
 pub fn recv(
     req: Form<InboundMessage>, func: &dyn Fn(InboundMessage) -> bool
