@@ -8,6 +8,7 @@ use {
     serde::Deserialize,
     std::{
         env::var as env_var,
+        future::Future,
         fs::OpenOptions,
         io::Write,
         path::PathBuf,
@@ -137,9 +138,12 @@ pub fn callback_error(msg: impl AsRef<str>) {
     let message = msg.as_ref();
     write_to_log(LogType::Error, format!("Callback - {}", message));
 }
-pub fn recv(
-    req: Form<InboundMessage>, func: &dyn Fn(InboundMessage) -> bool
-) -> impl Responder {
+pub async fn recv<F>(
+    req: Form<InboundMessage>, func: &dyn Fn(InboundMessage) -> F
+) -> impl Responder
+where
+    F: Future<Output = bool>
+{
     log("Received request");
     const ACCEPTED_KEY: &'static str = "TWILIO_RECV_ACCEPTED_NUMS";
     let accepted_nums = match env_var(ACCEPTED_KEY) {
@@ -175,7 +179,7 @@ pub fn recv(
         HttpResponse::InternalServerError().body(
             "Invalid \"from\" number"
         )
-    } else if func(msg) {
+    } else if func(msg).await {
         log("Handler succeeded");
         HttpResponse::Ok().body(
             "Message handler succeeded"
