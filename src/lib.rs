@@ -81,11 +81,12 @@ pub fn recv_callback_error(ctx: &LogContext, msg: impl AsRef<str>) {
     let message = msg.as_ref();
     ctx.error(format!("Callback - {}", message));
 }
-pub async fn recv<F>(
-    msg: InboundMessage, func: &dyn Fn(&LogContext, InboundMessage) -> F
+pub async fn recv<F, FN>(
+    msg: InboundMessage, func: &FN
 ) -> impl Responder
 where
-    F: Future<Output = bool>
+    F: Future<Output = bool>,
+    FN: Fn(&LogContext, InboundMessage) -> F
 {
     let ctx = LogContext::from_env(LOG_DIR, LOG_BASE_NAME);
     ctx.log("Received request");
