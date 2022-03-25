@@ -81,12 +81,11 @@ pub fn recv_callback_error(ctx: &LogContext, msg: impl AsRef<str>) {
     let message = msg.as_ref();
     ctx.error(format!("Callback - {}", message));
 }
-pub async fn recv<F, FN>(
-    msg: InboundMessage, func: &FN
+pub async fn recv<'a, F>(
+    msg: InboundMessage, func: &'static dyn Fn(LogContext, InboundMessage) -> F
 ) -> impl Responder
 where
-    F: Future<Output = bool>,
-    FN: Fn(&LogContext, InboundMessage) -> F
+    F: Future<Output = bool> + 'static
 {
     let ctx = LogContext::from_env(LOG_DIR, LOG_BASE_NAME);
     ctx.log("Received request");
@@ -123,7 +122,7 @@ where
         HttpResponse::InternalServerError().body(
             "Invalid \"from\" number"
         )
-    } else if func(&ctx, msg).await {
+    } else if func(ctx.clone(), msg).await {
         ctx.log("Handler succeeded");
         HttpResponse::Ok().body(
             "Message handler succeeded"
@@ -141,7 +140,7 @@ mod test_function {
         crate::InboundMessage,
         slog::LogContext,
     };
-    pub async fn test_receive(_: &LogContext, _: InboundMessage) -> bool {
+    pub async fn test_receive(_: LogContext, _: InboundMessage) -> bool {
         true
     }
 }
