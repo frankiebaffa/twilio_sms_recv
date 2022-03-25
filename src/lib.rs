@@ -11,7 +11,7 @@ use {
     },
 };
 const LOG_DIR: &'static str = "TWILIO_RECV_LOG_DIR";
-const LOG_BASE_NAME: &'static str = "twilio_sms_recv";
+const LOG_BASE_NAME: &'static str = "TWILIO_RECV_LOG_NAME";
 #[derive(Deserialize)]
 pub struct InboundMessage {
     #[serde(rename = "MessageSid")]
