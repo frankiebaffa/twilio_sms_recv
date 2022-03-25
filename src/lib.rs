@@ -2,7 +2,6 @@ use {
     actix_web::{
         HttpResponse,
         Responder,
-        web::Form,
     },
     serde::Deserialize,
     slog::LogContext,
@@ -27,6 +26,13 @@ pub struct InboundMessage {
     body: String,
 }
 impl InboundMessage {
+    #[cfg(test)]
+    pub fn new(
+        message_sid: String, account_sid: String, from: String,
+        to: String, body: String
+    ) -> Self {
+        Self { message_sid, account_sid, from, to, body, }
+    }
     pub fn get_message_sid(&self) -> String {
         self.message_sid.clone()
     }
@@ -43,7 +49,7 @@ impl InboundMessage {
         self.body.clone()
     }
 }
-pub enum NumberAcceptance<'a> {
+enum NumberAcceptance<'a> {
     All,
     Specific(Vec<&'a str>),
     Single(&'a str),
@@ -76,7 +82,7 @@ pub fn recv_callback_error(ctx: &LogContext, msg: impl AsRef<str>) {
     ctx.error(format!("Callback - {}", message));
 }
 pub async fn recv<F>(
-    req: Form<InboundMessage>, func: &dyn Fn(&LogContext, InboundMessage) -> F
+    msg: InboundMessage, func: &dyn Fn(&LogContext, InboundMessage) -> F
 ) -> impl Responder
 where
     F: Future<Output = bool>
@@ -111,7 +117,6 @@ where
             accepted_nums.as_str()
         );
     }
-    let msg = req.into_inner();
     if !check_num(nums, &msg) {
         ctx.error("From number failed check against accepted numbers");
         HttpResponse::InternalServerError().body(
@@ -127,5 +132,30 @@ where
         HttpResponse::InternalServerError().body(
             "Message handler failed"
         )
+    }
+}
+#[cfg(test)]
+mod test_function {
+    use {
+        crate::InboundMessage,
+        slog::LogContext,
+    };
+    pub async fn test_receive(_: &LogContext, _: InboundMessage) -> bool {
+        true
+    }
+}
+#[cfg(test)]
+mod tests {
+    use crate::{ InboundMessage, recv, test_function::test_receive, };
+    #[test]
+    fn test() {
+        let inbound = InboundMessage::new(
+            "TEST".to_string(),
+            "TEST".to_string(),
+            "+15555555555".to_string(),
+            "+15554443333".to_string(),
+            "Hello, World!".to_string()
+        );
+        recv(inbound, &test_receive);
     }
 }
