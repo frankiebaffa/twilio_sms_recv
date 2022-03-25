@@ -4,16 +4,15 @@ use {
         Responder,
         web::Form,
     },
-    chrono::Utc,
     serde::Deserialize,
+    slog::LogContext,
     std::{
         env::var as env_var,
         future::Future,
-        fs::OpenOptions,
-        io::Write,
-        path::PathBuf,
     },
 };
+const LOG_DIR: &'static str = "TWILIO_RECV_LOG_DIR";
+const LOG_BASE_NAME: &'static str = "twilio_sms_recv";
 #[derive(Deserialize)]
 pub struct InboundMessage {
     #[serde(rename = "MessageSid")]
@@ -68,88 +67,27 @@ fn check_num(acc: NumberAcceptance, msg: &InboundMessage) -> bool {
         },
     }
 }
-enum LogType {
-    Log,
-    Error,
-}
-impl LogType {
-    fn to_str(&self) -> String {
-        match self {
-            Self::Log => {
-                format!("LOG  ")
-            },
-            Self::Error => {
-                format!("ERROR")
-            },
-        }
-    }
-}
-fn write_to_log(log_type: LogType, msg: impl AsRef<str>) {
-    const LOG_DIR: &'static str = "TWILIO_RECV_LOG_DIR";
-    const BASE_NAME: &'static str = "twilio_sms_recv";
-    let now = Utc::now();
-    let now_short_fmt = now.format("%Y%m%d");
-    let now_long_fmt = now.format("%+");
-    let log_dir = match env_var(LOG_DIR) {
-        Ok(l) => l,
-        Err(e) => {
-            println!("Failed to find environment variable for log: {}", e);
-            return;
-        },
-    };
-    let mut path = PathBuf::from(log_dir);
-    let file_name = format!("{}.{}.log", BASE_NAME, now_short_fmt);
-    path.push(file_name);
-    let mut file = match OpenOptions::new()
-        .create(true)
-        .write(true)
-        .read(false)
-        .append(true)
-        .open(&path)
-    {
-        Ok(f) => f,
-        Err(e) => {
-            println!("Failed to open {} for writing: {}", path.to_str().unwrap(), e);
-            return;
-        },
-    };
-    match file.write_all(
-        format!("{} {}: {}\n", log_type.to_str(), now_long_fmt, msg.as_ref())
-            .as_bytes()
-    ) {
-        Ok(_) => {},
-        Err(e) => {
-            println!("Failed to write to {}: {}", path.to_str().unwrap(), e);
-            return;
-        },
-    }
-}
-fn log(msg: impl AsRef<str>) {
-    write_to_log(LogType::Log, msg);
-}
-pub fn callback_log(msg: impl AsRef<str>) {
+pub fn recv_callback_log(ctx: &LogContext, msg: impl AsRef<str>) {
     let message = msg.as_ref();
-    write_to_log(LogType::Log, format!("Callback - {}", message));
+    ctx.log(format!("Callback - {}", message));
 }
-fn error(msg: impl AsRef<str>) {
-    write_to_log(LogType::Error, msg);
-}
-pub fn callback_error(msg: impl AsRef<str>) {
+pub fn recv_callback_error(ctx: &LogContext, msg: impl AsRef<str>) {
     let message = msg.as_ref();
-    write_to_log(LogType::Error, format!("Callback - {}", message));
+    ctx.error(format!("Callback - {}", message));
 }
 pub async fn recv<F>(
-    req: Form<InboundMessage>, func: &dyn Fn(InboundMessage) -> F
+    req: Form<InboundMessage>, func: &dyn Fn(&LogContext, InboundMessage) -> F
 ) -> impl Responder
 where
     F: Future<Output = bool>
 {
-    log("Received request");
+    let ctx = LogContext::from_env(LOG_DIR, LOG_BASE_NAME);
+    ctx.log("Received request");
     const ACCEPTED_KEY: &'static str = "TWILIO_RECV_ACCEPTED_NUMS";
     let accepted_nums = match env_var(ACCEPTED_KEY) {
         Ok(an) => an,
         Err(e) => {
-            error(format!(
+            ctx.error(format!(
                 "Failed to retrieve variable from environment {}: {}",
                 ACCEPTED_KEY, e
             ));
@@ -160,32 +98,32 @@ where
     };
     let nums;
     if accepted_nums.eq(&"*") {
-        log("Accepting all numbers");
+        ctx.log("Accepting all numbers");
         nums = NumberAcceptance::All;
     } else if accepted_nums.contains(',') {
-        log("Accepting specific numbers");
+        ctx.log("Accepting specific numbers");
         nums = NumberAcceptance::Specific(
             accepted_nums.split(',').collect::<Vec<&str>>()
         );
     } else {
-        log("Accepting single number");
+        ctx.log("Accepting single number");
         nums = NumberAcceptance::Single(
             accepted_nums.as_str()
         );
     }
     let msg = req.into_inner();
     if !check_num(nums, &msg) {
-        error("From number failed check against accepted numbers");
+        ctx.error("From number failed check against accepted numbers");
         HttpResponse::InternalServerError().body(
             "Invalid \"from\" number"
         )
-    } else if func(msg).await {
-        log("Handler succeeded");
+    } else if func(&ctx, msg).await {
+        ctx.log("Handler succeeded");
         HttpResponse::Ok().body(
             "Message handler succeeded"
         )
     } else {
-        error("Handler failed");
+        ctx.error("Handler failed");
         HttpResponse::InternalServerError().body(
             "Message handler failed"
         )

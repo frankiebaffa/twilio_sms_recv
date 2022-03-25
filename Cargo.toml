@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.0.1"
-chrono = "0.4.19"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_qs = "0.9.1"
+slog = { git = "https://github.com/frankiebaffa/slog", branch = "master" }
